@@ -18,20 +18,9 @@ from google.adk.agents import Agent
 
 from support_system.billing_agent import billing_agent
 from support_system.support_agent import support_agent
-from returns_service.agent import root_agent as returns_agent
+from support_system.returns_agent import returns_agent
 
 load_dotenv()
-
-# NOTE: returns_agent is imported directly from returns_service due to an
-# a2a-sdk version incompatibility with google-adk 1.31.1.
-# The returns_service is still structured as a standalone A2A-compatible
-# service — once SDK versions align, swap this import back to RemoteA2aAgent:
-#
-#   from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
-#   returns_agent = RemoteA2aAgent(
-#       name="returns_agent",
-#       agent_card_url="http://localhost:8001/.well-known/agent.json",
-#   )
 
 # ------------------------------------------------------------------
 # Root Router Agent
