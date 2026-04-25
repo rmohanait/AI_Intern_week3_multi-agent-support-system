@@ -1,0 +1,19 @@
+# A2A Railway deployment configuration
+# Deploy this variant to expose support_system via the A2A protocol.
+#
+# To use: rename to railway.toml (replacing the current adk web config)
+# or create a separate Railway service pointed at this file.
+#
+# The --a2a flag adds Agent-to-Agent endpoints alongside the standard API:
+#   GET  /apps/support_system/.well-known/agent.json
+#   POST /apps/support_system/runs
+#   GET  /apps/support_system/runs/{run_id}
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "adk api_server --a2a --host 0.0.0.0 --port $PORT ."
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"

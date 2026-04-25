@@ -1,0 +1,144 @@
+[
+  {
+    "name": "billing_lookup_by_name",
+    "data": [
+      {
+        "query": "Hi, I'd like to check on my orders. My name is Alice Johnson.",
+        "expected_tool_use": [
+          {
+            "tool_name": "get_orders_for_customer",
+            "tool_input": { "customer_name": "Alice Johnson" }
+          }
+        ],
+        "expected_intermediate_agent_responses": [],
+        "reference": "I found your orders, Alice. You have orders on file including their status and details. Let me know if you have any specific questions about a particular order."
+      }
+    ],
+    "initial_session": {
+      "state": {},
+      "app_name": "support_system",
+      "user_id": "test_user_1"
+    }
+  },
+  {
+    "name": "billing_lookup_by_order_id",
+    "data": [
+      {
+        "query": "Can you check the status of order number 3 for me?",
+        "expected_tool_use": [
+          {
+            "tool_name": "get_order_by_id",
+            "tool_input": { "order_id": 3 }
+          }
+        ],
+        "expected_intermediate_agent_responses": [],
+        "reference": "I've looked up order #3 for you. Here are the details including the current status, product, and any relevant information."
+      }
+    ],
+    "initial_session": {
+      "state": {},
+      "app_name": "support_system",
+      "user_id": "test_user_2"
+    }
+  },
+  {
+    "name": "support_ticket_lookup",
+    "data": [
+      {
+        "query": "I submitted a support ticket last week about a broken headphone. Can you check the status? My name is Bob Smith.",
+        "expected_tool_use": [
+          {
+            "tool_name": "get_tickets_for_customer",
+            "tool_input": { "customer_name": "Bob Smith" }
+          }
+        ],
+        "expected_intermediate_agent_responses": [],
+        "reference": "I've looked up your support tickets, Bob. I can see your ticket about the broken headphones and its current status. Let me know if you need any further assistance."
+      }
+    ],
+    "initial_session": {
+      "state": {},
+      "app_name": "support_system",
+      "user_id": "test_user_3"
+    }
+  },
+  {
+    "name": "support_escalation_frustrated_customer",
+    "data": [
+      {
+        "query": "This is absolutely terrible! I've been waiting 3 weeks for a resolution and nobody has helped me. My name is Carol White. Escalate my ticket now!",
+        "expected_tool_use": [
+          {
+            "tool_name": "get_tickets_for_customer",
+            "tool_input": { "customer_name": "Carol White" }
+          }
+        ],
+        "expected_intermediate_agent_responses": [],
+        "reference": "I sincerely apologise for the wait, Carol. I can see your ticket and I'm escalating it right now to our senior support team. You will be contacted within 24 hours."
+      }
+    ],
+    "initial_session": {
+      "state": {},
+      "app_name": "support_system",
+      "user_id": "test_user_4"
+    }
+  },
+  {
+    "name": "returns_eligibility_check",
+    "data": [
+      {
+        "query": "I want to return my headphones from order 1. Can I still return them?",
+        "expected_tool_use": [
+          {
+            "tool_name": "check_return_eligibility",
+            "tool_input": { "order_id": 1 }
+          }
+        ],
+        "expected_intermediate_agent_responses": [],
+        "reference": "I've checked your order #1. Let me share the return eligibility status with you and explain the next steps."
+      }
+    ],
+    "initial_session": {
+      "state": {},
+      "app_name": "support_system",
+      "user_id": "test_user_5"
+    }
+  },
+  {
+    "name": "returns_initiate_return",
+    "data": [
+      {
+        "query": "I want to return order 2. The product arrived damaged.",
+        "expected_tool_use": [
+          {
+            "tool_name": "check_return_eligibility",
+            "tool_input": { "order_id": 2 }
+          }
+        ],
+        "expected_intermediate_agent_responses": [],
+        "reference": "I've checked your order #2 for return eligibility. Based on the eligibility check, I'll guide you through the return process for your damaged item."
+      }
+    ],
+    "initial_session": {
+      "state": {},
+      "app_name": "support_system",
+      "user_id": "test_user_6"
+    }
+  },
+  {
+    "name": "routing_ambiguous_query_clarification",
+    "data": [
+      {
+        "query": "I have a problem.",
+        "expected_tool_use": [],
+        "expected_intermediate_agent_responses": [],
+        "reference": "I'm sorry to hear you're having a problem! To help you best, could you share a bit more detail? For example: Is this about an order or payment, a support issue or complaint, or a return request?"
+      }
+    ],
+    "initial_session": {
+      "state": {},
+      "app_name": "support_system",
+      "user_id": "test_user_7"
+    }
+  }
+]

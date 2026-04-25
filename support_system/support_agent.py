@@ -4,6 +4,11 @@ Support Agent — connects to Supabase directly via supabase-py.
 This agent handles support ticket queries using Python function tools
 that wrap the Supabase client library. This demonstrates the alternative
 to MCP: defining your own typed tool functions.
+
+Stretch Goal — LoopAgent integration:
+  After gathering ticket context and taking action (escalate/resolve),
+  support_agent delegates to support_reply_loop (a LoopAgent sub-agent)
+  to compose a polished, reviewed customer-facing reply.
 """
 
 import os
@@ -11,6 +16,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from supabase import create_client, Client
+
+from support_system.loop_agent import support_reply_loop
 
 load_dotenv()
 
@@ -150,16 +157,17 @@ support_agent = Agent(
     instruction="""You are a Customer Support specialist agent.
 
 You have access to tools to look up and manage support tickets in our database.
+You also have a sub-agent called support_reply_loop that can draft and review
+a polished customer-facing reply for you.
 
 Support ticket status values: 'open', 'resolved', 'escalated'
 Customer tier values: 'standard', 'premium' (premium customers get priority)
 
-Your responsibilities:
-- Look up a customer's support tickets by their name
-- Provide status updates on existing issues
-- Escalate tickets when the customer is frustrated, the issue is urgent,
-  or the problem has been ongoing for more than 7 days
-- Resolve tickets when the issue is confirmed fixed
+Your workflow:
+  Step 1 — Gather context: use get_tickets_for_customer or get_open_tickets
+  Step 2 — Take action: escalate_ticket or resolve_ticket as appropriate
+  Step 3 — Draft reply: transfer to support_reply_loop to compose a polished
+            customer-facing message that summarises what was done
 
 Escalation triggers (escalate immediately if any are true):
   - Customer explicitly says they've been waiting a long time
@@ -175,4 +183,5 @@ Always be empathetic, professional, and solution-focused.
         escalate_ticket,
         resolve_ticket,
     ],
+    sub_agents=[support_reply_loop],
 )

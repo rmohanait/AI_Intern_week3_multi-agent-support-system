@@ -4,6 +4,19 @@ Billing Agent — connects to Supabase via supabase-py.
 This agent handles order and billing queries by using Python function tools
 that wrap the Supabase client directly.
 
+Stretch Goal — Tool Filtering (read-only):
+  All tools defined in this module are split into two explicit lists:
+
+    BILLING_READ_TOOLS  — safe to expose; only fetch data, never mutate
+    BILLING_WRITE_TOOLS — intentionally excluded from the agent
+
+  billing_agent is constructed with tools=BILLING_READ_TOOLS only.
+  This enforces a read-only contract at the agent level: the LLM cannot
+  accidentally call a write tool because it is simply not in the tool list.
+
+  add_order_note() is defined below as a representative write operation and
+  is present in BILLING_WRITE_TOOLS to illustrate the filtering pattern.
+
 NOTE on MCP: The original design used MCPToolset with the Supabase MCP server
 (via npx). That approach requires Node.js and async context manager setup.
 The direct supabase-py approach below achieves the same result and is more
@@ -141,6 +154,57 @@ def get_orders_by_email(email: str) -> dict:
 
 
 # ------------------------------------------------------------------
+# Write tool (intentionally EXCLUDED from billing_agent via tool filtering)
+# ------------------------------------------------------------------
+
+def add_order_note(order_id: int, note: str) -> dict:
+    """Append an internal note to an order record.
+
+    This is a WRITE operation — it modifies the database.
+    It is intentionally excluded from billing_agent's tool list to keep
+    the agent read-only. Only agents with explicit write access should
+    receive this tool.
+
+    Args:
+        order_id: The ID of the order to annotate.
+        note:     The internal note text to append.
+
+    Returns:
+        A dict confirming the update or an error.
+    """
+    try:
+        db = _get_client()
+        result = (
+            db.table("orders")
+            .update({"notes": note})
+            .eq("id", order_id)
+            .execute()
+        )
+        if result.data:
+            return {"success": True, "order_id": order_id, "note": note}
+        return {"error": f"Order #{order_id} not found"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ------------------------------------------------------------------
+# Tool Filtering — explicit read/write split
+# billing_agent receives ONLY read tools; write tools are excluded.
+# ------------------------------------------------------------------
+
+BILLING_READ_TOOLS = [
+    get_orders_for_customer,
+    get_order_by_id,
+    get_orders_by_email,
+]
+
+BILLING_WRITE_TOOLS = [
+    add_order_note,         # excluded from billing_agent (read-only policy)
+    # add future write tools here (e.g., update_shipping_address, cancel_order)
+]
+
+
+# ------------------------------------------------------------------
 # Agent definition
 # ------------------------------------------------------------------
 billing_agent = Agent(
@@ -148,10 +212,10 @@ billing_agent = Agent(
     model="gemini-2.5-flash",
     instruction="""You are a Billing & Orders specialist agent.
 
-You have tools to look up orders and customer info from our database.
+You have READ-ONLY access to order and customer data.
 Use the tools to fetch real data — never guess or make up order details.
 
-Available tools:
+Available tools (read-only):
 - get_orders_for_customer(customer_name) — look up by name
 - get_orders_by_email(email) — look up by email
 - get_order_by_id(order_id) — look up a specific order
@@ -164,9 +228,13 @@ Your responsibilities:
 - Answer billing and payment questions
 - Explain order details clearly
 
+You do NOT have the ability to modify orders, add notes, or make any changes.
+If a customer requests a change (cancel, modify), direct them to contact support.
+
 If the customer gives their name, use get_orders_for_customer first.
 If you have an order ID, use get_order_by_id.
 Be concise, clear, and professional.
 """,
-    tools=[get_orders_for_customer, get_order_by_id, get_orders_by_email],
+    # Tool filtering: only read tools are passed — write tools are explicitly excluded
+    tools=BILLING_READ_TOOLS,
 )
