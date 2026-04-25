@@ -1,5 +1,5 @@
 # Multi-Agent Customer Support System
-### Built with Google ADK · Supabase MCP · A2A Protocol
+### Built with Google ADK · Supabase · A2A Protocol
 
 ---
 
@@ -9,24 +9,30 @@
 User Query
     │
     ▼
-┌─────────────────────────────────┐
-│     Root Router Agent (ADK)     │
-│   customer_support_router       │
-└──────────┬──────────┬───────────┘
-           │          │          │
-           ▼          ▼          ▼
-    ┌──────────┐ ┌──────────┐ ┌─────────────────┐
-    │ billing  │ │ support  │ │  returns_agent   │
-    │  agent   │ │  agent   │ │ (RemoteA2aAgent) │
-    └────┬─────┘ └────┬─────┘ └────────┬─────────┘
-         │            │                │ HTTP/A2A
-         ▼            ▼                ▼
-    Supabase MCP  supabase-py   ┌──────────────────┐
-    (orders,      (support_     │  Returns Service  │
-    customers)    tickets)      │  (port 8001)      │
-                                │  check_eligibility│
-                                │  initiate_return  │
-                                └──────────────────┘
+┌─────────────────────────────────────┐
+│       Root Router Agent (ADK)        │
+│       customer_support_router        │
+└──────────┬──────────────┬────────────┘
+           │              │            │
+           ▼              ▼            ▼
+    ┌────────────┐ ┌────────────┐ ┌─────────────────┐
+    │  billing   │ │  support   │ │  returns_agent   │
+    │   agent    │ │   agent    │ │ (RemoteA2aAgent) │
+    │ (READ ONLY)│ └─────┬──────┘ └────────┬─────────┘
+    └─────┬──────┘       │                 │ HTTP/A2A
+          │              ▼                 ▼
+     supabase-py   ┌─────────────┐  ┌──────────────────┐
+     (read tools   │ support_    │  │  Returns Service  │
+      only)        │ reply_loop  │  │  (port 8001)      │
+                   │ (LoopAgent) │  │  check_eligibility│
+                   └──────┬──────┘  │  initiate_return  │
+                          │         └──────────────────┘
+                 ┌────────┴────────┐
+                 ▼                 ▼
+          reply_drafter    reply_reviewer
+          (drafts reply)   (approves or
+                            requests revision,
+                            calls exit_loop)
 ```
 
 ---
@@ -35,16 +41,23 @@ User Query
 
 ```
 Week_3/
-├── support_system/              # Main ADK agent package
-│   ├── agent.py                 # Root router agent (entry point)
-│   └── sub_agents/
-│       ├── billing_agent.py     # Handles orders/billing via Supabase MCP
-│       └── support_agent.py     # Handles tickets via supabase-py tools
-├── returns_service/             # Separate A2A service
-│   └── agent.py                 # Returns agent (check + initiate return)
-├── seed.sql                     # Sample data for Supabase
+├── support_system/
+│   ├── __init__.py
+│   ├── agent.py                  # Root router agent (entry point)
+│   ├── billing_agent.py          # Orders/billing — READ ONLY (tool filtering)
+│   ├── support_agent.py          # Tickets, escalations, delegates to loop
+│   ├── loop_agent.py             # LoopAgent: drafter + reviewer sub-agents
+│   └── returns_agent.py          # Calls returns service via A2A
+├── eval/
+│   ├── support_evals.json        # 7 ADK eval test cases
+│   └── README.md                 # How to run evals
+├── a2a_server.py                 # Launch support_system as A2A server
+├── a2a_client_demo.py            # Demo: call the A2A server over HTTP
+├── a2a.railway.toml              # Railway config for A2A deployment
+├── railway.toml                  # Railway config for adk web deployment
+├── seed.sql                      # Sample data for Supabase
 ├── requirements.txt
-├── .env.example                 # Copy to .env and fill in your keys
+├── stretch_goals_summary.docx    # Full write-up with diagrams and code
 └── README.md
 ```
 
@@ -54,7 +67,6 @@ Week_3/
 
 ### 1. Prerequisites
 - Python 3.10+
-- Node.js + npx (for Supabase MCP server)
 - A Supabase project ([supabase.com](https://supabase.com))
 - A Google API key ([aistudio.google.com](https://aistudio.google.com/apikey))
 
@@ -72,23 +84,14 @@ cp .env.example .env
 
 ### 4. Set up Supabase
 - Create a new Supabase project
-- Run the table creation SQL from the earlier step in SQL Editor
+- Run the table creation SQL in SQL Editor
 - Run `seed.sql` in SQL Editor to populate sample data
-- Disable Row Level Security (RLS) on all 3 tables for simplicity
+- Disable Row Level Security (RLS) on all tables
 
 ---
 
 ## Running the System
 
-You need **two terminals** running simultaneously.
-
-### Terminal 1 — Start the Returns A2A Service (port 8001)
-```bash
-cd Week_3
-adk api_server returns_service --port 8001
-```
-
-### Terminal 2 — Start the Main Support System
 ```bash
 cd Week_3
 adk web support_system
@@ -96,28 +99,35 @@ adk web support_system
 
 Then open [http://localhost:8000](http://localhost:8000) in your browser.
 
+### Run as A2A server (optional)
+```bash
+adk api_server --a2a --host 0.0.0.0 --port 8080 .
+```
+
+Agent Card available at: `http://localhost:8080/apps/support_system/.well-known/agent.json`
+
 ---
 
 ## Test Scenarios
 
-### Scenario 1: Billing (MCP)
-> *"What's the status of my order? My name is Alice Johnson."*
+### Scenario 1: Billing — lookup by name
+> *"What's the status of my orders? My name is Alice Johnson."*
 
-Expected flow: Root → billing_agent → Supabase MCP query → returns order details
+Flow: Root → billing_agent → `get_orders_for_customer` → returns order list
 
 ---
 
-### Scenario 2: Returns (A2A)
+### Scenario 2: Support — escalation + LoopAgent reply
+> *"I've had a broken keyboard for 3 weeks and nobody has helped me."*
+
+Flow: Root → support_agent → `get_tickets_for_customer` → `escalate_ticket` → support_reply_loop (drafter → reviewer up to 3x) → polished reply
+
+---
+
+### Scenario 3: Returns — eligibility check + initiate
 > *"I want to return my headphones. The order ID is 1."*
 
-Expected flow: Root → returns_agent (RemoteA2aAgent) → HTTP to port 8001 → check_return_eligibility → initiate_return
-
----
-
-### Scenario 3: Escalation
-> *"I've had a broken keyboard for 3 weeks and nobody has helped me. This is unacceptable."*
-
-Expected flow: Root → support_agent → get_tickets_for_customer → escalate_ticket (detects frustration keywords)
+Flow: Root → returns_agent (RemoteA2aAgent) → HTTP to port 8001 → `check_return_eligibility` → `initiate_return`
 
 ---
 
@@ -125,16 +135,17 @@ Expected flow: Root → support_agent → get_tickets_for_customer → escalate_
 
 | Concept | What it does in this project |
 |---------|------------------------------|
-| **MCP** | billing_agent uses Supabase MCP server to query the DB via protocol |
-| **A2A** | returns_service exposes an agent over HTTP; main system calls it remotely |
-| **Sub-agents** | Root router delegates to specialists without answering itself |
-| **RemoteA2aAgent** | ADK's built-in client for calling A2A-compatible agent services |
+| **Sub-agents** | Root router delegates to specialist agents without answering itself |
+| **LoopAgent** | Runs drafter → reviewer repeatedly until `exit_loop()` is called or max 3 iterations |
+| **Tool Filtering** | billing_agent only receives `BILLING_READ_TOOLS` — write tools are defined but never passed to the agent |
+| **A2A** | support_system exposes an Agent Card + `/run` endpoint; any service can call it over HTTP |
+| **ADK Eval** | 7 test cases in `eval/support_evals.json` validated with `adk eval` |
 
 ---
 
 ## Stretch Goals
 
-- [ ] **LoopAgent** — wrap support_agent in a LoopAgent for multi-turn resolution flows
-- [ ] **Tool Filtering** — use `readonly=True` on Supabase MCP to prevent writes
-- [ ] **Eval Test Cases** — add 5+ eval scenarios in `evals/` folder
-- [ ] **Expose via A2A** — wrap the entire support_system as an A2A service too
+- [x] **LoopAgent** — `support_reply_loop` iterates drafter → reviewer up to 3 times; reviewer calls `exit_loop()` on approval
+- [x] **Tool Filtering** — `billing_agent` receives only `BILLING_READ_TOOLS`; write tools excluded at agent definition
+- [x] **Eval Test Cases** — 7 scenarios in `eval/support_evals.json` covering all agents and routing cases
+- [x] **Expose via A2A** — `a2a_server.py` + `a2a.railway.toml` expose the full system as an A2A-compatible service
